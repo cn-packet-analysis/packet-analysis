@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1568" height="452" viewBox="0 0 1568 452" role="img" aria-labelledby="title desc">
+  <title id="title">wirefish 시스템 아키텍처</title>
+  <desc id="desc">네트워크 프레임을 계층별로 분석하는 수신 전용 패킷 캡처 CLI. Linux 인터페이스 수신에서 파싱·필터를 거쳐 출력·pcap·검증으로 이어지는 처리 흐름이며 화살표는 소스 의존성이 아니다. capture.py가 소켓 수신과 pcap 저장을, parse.py가 계층별 파싱을, output.py가 필터·출력·통계를 맡는다. Linux 실기 재검증은 실기 환경 실행을 기다리고 있다.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; fill: #1A2028; }
+    .heading { font-size: 27px; font-weight: 700; }
+    .subtitle { font-size: 19px; fill: #525862; }
+    .body { font-size: 19px; }
+    .label { font-size: 18px; font-weight: 700; fill: #2D56B6; }
+    .role { font-size: 17px; font-weight: 700; fill: #2D56B6; }
+    .icon { fill: none; stroke: #2D56B6; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <rect width="1568" height="452" rx="16" fill="#F1F4F8"/>
+  <g transform="translate(24 24)">
+    <rect width="400" height="404" rx="14" fill="#FFFFFF" stroke="#DBDEE3"/>
+    <rect x="24" y="24" width="64" height="64" rx="16" fill="#E7EDF9"/>
+    <g class="icon" transform="translate(32 32)" aria-hidden="true"><rect x="4" y="16" width="40" height="22" rx="4"/><path d="M12 38v5M24 38v5M36 38v5M14 16V7h20v9M11 27h4M22 27h4M33 27h4"/></g>
+    <text x="104" y="63" class="label">01 | 패킷 수신</text>
+    <text x="24" y="126" class="heading">Linux 인터페이스</text>
+    <text x="24" y="154" class="subtitle">AF_PACKET · SOCK_RAW</text>
+    <text x="24" y="181" class="subtitle">root 또는 CAP_NET_RAW</text>
+    <path d="M24 200H376" stroke="#DBDEE3"/>
+    <text x="24" y="233" class="role">capture.py · open_socket</text>
+    <text x="24" y="264" class="body">인터페이스 바인드 · 송신 없음</text>
+    <text x="24" y="315" class="role">sniff</text>
+    <text x="24" y="346" class="body">타임스탬프·원시 프레임 · EINTR 재시도</text>
+  </g>
+  <g transform="translate(584 24)">
+    <rect width="400" height="404" rx="14" fill="#FFFFFF" stroke="#DBDEE3"/>
+    <rect x="24" y="24" width="64" height="64" rx="16" fill="#E7EDF9"/>
+    <g class="icon" transform="translate(32 32)" aria-hidden="true"><rect x="4" y="5" width="40" height="10" rx="3"/><rect x="4" y="19" width="40" height="10" rx="3"/><rect x="4" y="33" width="40" height="10" rx="3"/><path d="M10 10h8M10 24h14M10 38h20"/></g>
+    <text x="104" y="63" class="label">02 | 핵심 처리</text>
+    <text x="24" y="126" class="heading">파싱 · 필터</text>
+    <text x="24" y="154" class="subtitle">Python 3.10+ 표준 라이브러리</text>
+    <text x="24" y="181" class="subtitle">struct 기반 계층별 디스패치</text>
+    <path d="M24 200H376" stroke="#DBDEE3"/>
+    <text x="24" y="233" class="role">parse.py</text>
+    <text x="24" y="264" class="body">pkt 딕셔너리 · 길이·DNS 경계 검증</text>
+    <text x="24" y="315" class="role">output.py</text>
+    <text x="24" y="346" class="body">match 필터 · Stats 통계 · show</text>
+  </g>
+  <g transform="translate(1144 24)">
+    <rect width="400" height="404" rx="14" fill="#FFFFFF" stroke="#DBDEE3"/>
+    <rect x="24" y="24" width="64" height="64" rx="16" fill="#E7EDF9"/>
+    <g class="icon" transform="translate(32 32)" aria-hidden="true"><rect x="3" y="5" width="42" height="34" rx="4"/><path d="M11 16l7 6-7 6M22 30h12"/></g>
+    <text x="104" y="63" class="label">03 | 출력·검증</text>
+    <text x="24" y="126" class="heading">결과 출력</text>
+    <text x="24" y="154" class="subtitle">stdout 패킷·통계 · stderr 오류</text>
+    <path d="M24 200H376" stroke="#DBDEE3"/>
+    <text x="24" y="233" class="role">PcapWriter</text>
+    <text x="24" y="264" class="body">pcap 저장 · 캡처 전 파일 오픈</text>
+    <text x="24" y="315" class="role">verify.sh · collect-analysis.sh</text>
+    <text x="24" y="346" class="body">tshark 대조 · 5종 명령어 수집</text>
+  </g>
+  <g>
+    <text x="504" y="207" class="role" text-anchor="middle">원시 프레임</text>
+    <text x="1064" y="207" class="role" text-anchor="middle">필터 통과분</text>
+    <path d="M440 226H568m-8-6 8 6-8 6M1000 226H1128m-8-6 8 6-8 6" fill="none" stroke="#2D56B6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"/>
+  </g>
+</svg>

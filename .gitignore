@@ -1,0 +1,27 @@
+# OS
+.DS_Store
+._*
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Packet captures and local analysis results
+*.pcap
+*.pcapng
+*.cap
+*.capture.txt
+*.capture.err
+*.packets.txt
+*.tshark.err
+*.stream.txt
+*.command
+*.exit
+/analysis/
+/com-net-analysis*/
+
+# Python
+__pycache__/
+*.py[cod]

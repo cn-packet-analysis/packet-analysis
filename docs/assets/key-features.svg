@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="452" viewBox="0 0 1280 452" role="img" aria-labelledby="title desc">
+  <title id="title">wirefish 핵심 기능</title>
+  <desc id="desc">wirefish의 핵심 기능. Linux AF_PACKET 원시 소켓으로 프레임을 수신만 하고 필터 통과 패킷을 pcap으로 저장한다. Ethernet·IPv4·ARP·TCP·UDP·ICMP를 계층별로 파싱하고 포트 기반으로 HTTP·DNS를 식별한다. 프로토콜·호스트·포트 필터를 적용해 패킷당 1줄 또는 계층별 상세로 출력하고 종료 시 통계를 보여 주며, 무인자 실행은 자체 점검을 수행한다.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; fill: #1A2028; }
+    .heading { font-size: 27px; font-weight: 700; }
+    .subtitle { font-size: 19px; fill: #525862; }
+    .body { font-size: 19px; }
+    .label { font-size: 18px; font-weight: 700; fill: #2D56B6; }
+    .role { font-size: 17px; font-weight: 700; fill: #2D56B6; }
+    .icon { fill: none; stroke: #2D56B6; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <rect width="1280" height="452" rx="16" fill="#F1F4F8"/>
+  <g transform="translate(24 24)">
+    <rect width="400" height="404" rx="14" fill="#FFFFFF" stroke="#DBDEE3"/>
+    <rect x="24" y="24" width="64" height="64" rx="16" fill="#E7EDF9"/>
+    <g class="icon" transform="translate(32 32)" aria-hidden="true"><rect x="5" y="26" width="38" height="16" rx="4"/><path d="M12 34h1M18 34h1M24 34h1M24 4v16M17 13l7 7 7-7"/></g>
+    <text x="104" y="63" class="label">01 | 패킷 수신</text>
+    <text x="24" y="132" class="heading">원시 프레임 캡처</text>
+    <text x="24" y="164" class="subtitle">Linux AF_PACKET · 수신 전용</text>
+    <path d="M24 190H376" stroke="#DBDEE3"/>
+    <text x="24" y="226" class="role">실시간 캡처</text>
+    <text x="24" y="257" class="body">인터페이스 지정 · root 권한</text>
+    <text x="24" y="315" class="role">pcap 저장</text>
+    <text x="24" y="346" class="body">필터 통과분 저장 · -c 수량 제한</text>
+  </g>
+  <g transform="translate(440 24)">
+    <rect width="400" height="404" rx="14" fill="#FFFFFF" stroke="#DBDEE3"/>
+    <rect x="24" y="24" width="64" height="64" rx="16" fill="#E7EDF9"/>
+    <g class="icon" transform="translate(32 32)" aria-hidden="true"><path d="M24 5 43 14 24 23 5 14ZM5 24l19 9 19-9M5 34l19 9 19-9"/></g>
+    <text x="104" y="63" class="label">02 | 계층별 파싱</text>
+    <text x="24" y="132" class="heading">캡슐화 계층 분석</text>
+    <text x="24" y="164" class="subtitle">Ethernet · IPv4 · ARP · L4 헤더</text>
+    <path d="M24 190H376" stroke="#DBDEE3"/>
+    <text x="24" y="226" class="role">TCP · UDP · ICMP</text>
+    <text x="24" y="257" class="body">Echo id/seq · 오류 인용 IPv4</text>
+    <text x="24" y="315" class="role">포트 기반 식별</text>
+    <text x="24" y="346" class="body">HTTP 첫 줄 · DNS 질문·A 응답</text>
+  </g>
+  <g transform="translate(856 24)">
+    <rect width="400" height="404" rx="14" fill="#FFFFFF" stroke="#DBDEE3"/>
+    <rect x="24" y="24" width="64" height="64" rx="16" fill="#E7EDF9"/>
+    <g class="icon" transform="translate(32 32)" aria-hidden="true"><path d="M5 7h38L28 25v14l-8 4V25Z"/></g>
+    <text x="104" y="63" class="label">03 | 필터·출력</text>
+    <text x="24" y="132" class="heading">필요한 패킷만 보기</text>
+    <text x="24" y="164" class="subtitle">프로토콜 · 호스트 · 포트 필터</text>
+    <path d="M24 190H376" stroke="#DBDEE3"/>
+    <text x="24" y="226" class="role">출력</text>
+    <text x="24" y="257" class="body">패킷당 1줄 · -v 계층별 상세</text>
+    <text x="24" y="315" class="role">통계 · 자체 점검</text>
+    <text x="24" y="346" class="body">종료 시 통계 · 무인자 자체 점검</text>
+  </g>
+</svg>
