@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Linux 수신 전용 캡처·pcap·CLI. 무인자는 OS 무관 자체 점검."""
-import argparse, socket, struct, sys, time
+import argparse, os, signal, socket, struct, sys, time
 from contextlib import ExitStack, closing
 import output
 from parse import esc, parse
@@ -12,6 +12,12 @@ class PcapWriter:
         except OSError:
             self.f.close()
             raise
+        uid, gid = os.environ.get("SUDO_UID"), os.environ.get("SUDO_GID")
+        if uid and gid and hasattr(os, "fchown") and os.geteuid() == 0:
+            try:
+                os.fchown(self.f.fileno(), int(uid), int(gid))
+            except (OSError, ValueError):
+                pass
     def write(self, ts, raw):
         self.f.write(struct.pack("<IIII", int(ts), int(ts % 1 * 1_000_000), len(raw), len(raw)))
         self.f.write(raw)
@@ -50,6 +56,7 @@ def main():
     if not opts.iface:
         import selfcheck
         return selfcheck.run()
+    signal.signal(signal.SIGINT, signal.default_int_handler)  # 비대화형 백그라운드 실행 시 SIG_IGN 복원
     stats = output.Stats()
     try:
         with ExitStack() as stack:

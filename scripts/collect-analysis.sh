@@ -36,7 +36,7 @@ run_command() {
 
 start_capture() {
   local name=$1
-  sudo -n timeout -s INT --preserve-status "$CAPTURE_SEC" python3 src/capture.py \
+  sudo -n timeout -s INT -k 3 --preserve-status "$CAPTURE_SEC" python3 src/capture.py \
     -i "$iface" -v -w "$out/$name.pcap" > "$out/$name.capture.txt" 2> "$out/$name.capture.err" &
   capture_pid=$!
   for ((i=0; i<100; i++)); do

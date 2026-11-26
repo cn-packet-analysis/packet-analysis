@@ -33,6 +33,4 @@ TUI는 `python3 src/tui.py --selfcheck`로 `.pcap` 리더(리틀/빅 엔디언·
 
 FAIL은 0이어야 하며, 도구·트래픽 부족으로 발생한 필수 SKIP은 환경을 갖춰 재실행해 해소해야 완료 기준을 충족한다.
 
-- **최신 로컬 판정(Linux 오프라인·PTY 검증)**: `./scripts/verify.sh --offline` 정적·모의 검사 `PASS 5 / FAIL 0 / SKIP 2`(실기 2건 SKIP), `python3 src/capture.py`·`python3 src/tui.py --selfcheck` 통과(CLI 4파일 487줄), PTY 인터랙티브 렌더링(`xterm-256color`/`vt100`/`dumb`, 80×24·60×16 한글 폭·오프라인 SSH `.pcap`) 및 `check_docs.py` 0건 통과.
-- **직전 Linux 실기 판정(확장 전 기준)**: Ubuntu 24.04(`eth0`) `PASS 18 / FAIL 0 / SKIP 0`.
-- **Linux 실기 재확인 필요(미확인 항목)**: 확장된 코드·스크립트로 Linux 실기 `./scripts/verify.sh eth0` 재실행, 정상 응답 대상(`PING_TARGET`, `TRACE_TARGET` 지정) 5종 수집 및 `traceroute` 최종 목적지 ICMP `Type 3 / Code 3` 확인, Wireshark 대조 검증.
+- **최신 Linux 실기 판정**: Ubuntu Linux(`wlo1`)에서 `TRACE_HOPS=12 ./scripts/verify.sh wlo1` 실행 결과 `PASS 19 / FAIL 0 / SKIP 0`(정적 5, 실기 `tshark` 대조 4, 필터·통계 5, 장애 주입 4, 5종 명령어 연계 1)을 확인했다. `python3 src/capture.py`, `python3 src/tui.py --selfcheck`, PTY 렌더링·2,021프레임 퍼징, `check_docs.py`(0건)도 모두 통과했다.

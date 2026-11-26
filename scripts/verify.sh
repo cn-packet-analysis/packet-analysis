@@ -300,10 +300,12 @@ else
   cap() { local s=$1; shift
     sudo timeout -s INT --preserve-status "$s" python3 src/capture.py -i "$IFACE" "$@"; }
 
-  c1() { cap 30 -c 50 -w "$T/c1.pcap" > "$T/c1.txt" &&
+  c1() { local out
+         cap 30 -c 50 -w "$T/c1.pcap" > "$T/c1.txt" &&
          awk '/^[0-9][0-9]:[0-9][0-9]:[0-9][0-9][.]/{n++} END {exit(n != 50)}' "$T/c1.txt" &&
          grep -q '^captured 50 ' "$T/c1.txt" &&
-         test "$(tshark -r "$T/c1.pcap" | wc -l)" -eq 50; }
+         out=$(tshark -r "$T/c1.pcap") &&
+         test "$(printf '%s\n' "$out" | wc -l)" -eq 50; }
   try '완료정의1  캡처 50개 = pcap 50개' c1
 
   # 필드 대조는 한 번 잡아 두 번 본다. 필터 없이, IPv4 비단편 트래픽으로.
@@ -337,7 +339,8 @@ else
   TS='$1 ~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9][.]/'
   no_icmp() { awk "$TS"' && $6 == "ICMP" {n++} END {exit(n + 0 != 0)}' "$T/ftr.txt"; }
   ten_tcp() { awk "$TS"' && $6 == "TCP"  {n++} END {exit(n + 0 != 10)}' "$T/ftr.txt"; }
-  pcap_ftr() { test -s "$T/ftr.pcap" && test "$(tshark -r "$T/ftr.pcap" -Y 'not tcp' | wc -l)" -eq 0; }
+  pcap_ftr() { local bad_pkts
+               test -s "$T/ftr.pcap" && bad_pkts=$(tshark -r "$T/ftr.pcap" -Y 'not tcp') && test -z "$bad_pkts"; }
   dns_seen() { cap 45 -c 40 -v > "$T/dns.txt" && grep -q 'example.com' "$T/dns.txt"; }
   counted()  { cap 20 -c 5 | tail -1 | grep -q '^captured 5 '; }
   try '필터  -p tcp 출력에 ICMP 없음' no_icmp

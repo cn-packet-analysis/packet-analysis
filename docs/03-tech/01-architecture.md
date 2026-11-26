@@ -36,9 +36,7 @@
 
 ## 남은 작업과 리스크
 
-| 항목 | 현재 상태·대기 이유 | 재개 조건·작업 |
-| --- | --- | --- |
-| Linux 실기 재검증 및 5종 패킷 검증 | 확장 구현 반영 후 Linux 실기 환경 실행 필요 | Linux에서 `./scripts/verify.sh` 재실행 및 정상 응답 대상(`PING_TARGET`, `TRACE_TARGET` 지정)으로 [collect-analysis.sh](../../scripts/collect-analysis.sh) 수집·Wireshark 대조 검증([Linux 실기 검사](../04-test/01-verification.md#linux-실기-검사)) |
+현재 남은 미확인 작업은 없다(Linux 실기 `PASS 19 / FAIL 0 / SKIP 0` 확인 완료, [테스트 명세](../04-test/01-verification.md#결과-판정)).
 
 | 위험 요인 | 점검 방법 |
 | --- | --- |
