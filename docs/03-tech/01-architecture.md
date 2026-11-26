@@ -17,6 +17,7 @@
 | [parse.py](../../src/parse.py) | 공유 `pkt` 딕셔너리, 계층별 디스패치, `_header` 길이·DNS 경계 검증 |
 | [output.py](../../src/output.py) | 요약·상세 출력(`show`), 필터(`match`), 통계(`Stats`) |
 | [selfcheck.py](../../src/selfcheck.py) | 고정 프레임, 길이·단편·DNS 경계, `KEYS`, 출력 필드 자체 점검 |
+| [tui.py](../../src/tui.py) | `curses` 기반 3-패널 TUI(실시간 캡처·`.pcap` 읽기·샘플 데모), 기존 파서·필터·통계 재사용 |
 | [verify.sh](../../scripts/verify.sh) | 실기 `tshark` 대조 및 PASS/FAIL/SKIP 판정 |
 | [collect-analysis.sh](../../scripts/collect-analysis.sh) | Linux 명령어 출력·자체 캡처·pcap·외부 해석 일괄 수집 |
 
@@ -26,6 +27,12 @@
 - IPv4 상세 출력의 `id`와 TCP 상세 출력의 원본 `ack`는 기존 필드 뒤에 배치해 검증 `awk` 필드 위치를 유지한다([페이로드 규칙](../01-func/01-requirements.md#출력과-오류-처리)).
 - ICMP는 `type`·`code`·`csum`을 기본 파싱하며, 8B 이상 Echo(`type` 8/0)는 `id`·`seq`를, 오류 메시지(`type` 3/11)는 내부 인용 IPv4(`src`, `dst`, `ttl`, `proto`, `id`)와 원본 L4 포트(`sport`, `dport`)를 `quoted`에 기록해 `-v`에서 `[Quoted]` 줄로 출력한다. `--host`·`--port` 필터도 `quoted`를 함께 대조한다.
 - 손상 패킷은 완성 계층까지 화면에 출력하고 `show()`가 오류 원인을 `stderr`에 기록한다.
+
+### TUI 구조
+
+- [tui.py](../../src/tui.py)는 기존 CLI 4파일을 수정하지 않고 `capture`·`parse`·`output`·`selfcheck`를 그대로 임포트해 파싱·필터·통계·pcap 저장 계약을 공유한다.
+- 입력 소스는 세 가지로 나뉜다. 실시간 캡처(`-i`)는 `open_socket()`에 짧은 타임아웃을 걸고 백그라운드 스레드에서 프레임을 수신해 큐로 전달한다. 오프라인 분석(`-r`)은 표준 Ethernet(`.pcap`, 리틀·빅 엔디언 및 µs·ns 매직) 레코드를 순차 파싱한다. 인자 생략(`--demo`) 시 `selfcheck` 기반 샘플 패킷 세트를 적재해 OS·권한과 무관하게 3-패널을 탐색할 수 있다.
+- 화면은 상단 헤더, 3-패널(패킷 목록·계층별 상세·Hex/ASCII 덤프), 하단 통계·단축키 바로 구성한다. `Tab`으로 포커스를 전환해 각 패널을 독립 스크롤하며, 실시간 모드에서는 `Space`로 일시정지, `f`로 최신 패킷 자동 추적을 제어하고 `/`로 화면 내 검색·필터를 적용한다.
 
 ## 남은 작업과 리스크
 

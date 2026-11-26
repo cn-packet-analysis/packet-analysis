@@ -10,6 +10,8 @@ CI는 무인자 자체 점검을 실행하며, 캡처 권한·외부 트래픽·
 
 [README 테스트](../../README.md#테스트) 명령으로 코드 500줄 상한, 송신 호출 부재, 고정·경계 프레임 파싱(ICMP Echo `id`/`seq` 및 Type 3/11 내부 인용 IPv4·UDP 포함), DNS 압축 이름·다중 응답·미지원 타입·절단 레코드, 모의 수신·pcap 저장·5종 분석 수집/판정, `stdout/stderr` 분리, 자원 정리를 검사한다(비-Linux는 실기 항목 SKIP).
 
+TUI는 `python3 src/tui.py --selfcheck`로 `.pcap` 리더(리틀/빅 엔디언·µs/ns·절단/오류 검출), 샘플 데모 적재, 3-패널(목록·상세·Hex/ASCII) 렌더링·스크롤·검색 필터·일시정지·pcap 저장 동작을 비-TTY 환경에서도 자동 검증한다.
+
 ### Linux 실기 검사
 
 1. [시작하기](../../README.md#시작하기)로 Python 버전과 인터페이스를 확인한다(`lo`는 MAC 대조 제외).
@@ -31,6 +33,6 @@ CI는 무인자 자체 점검을 실행하며, 캡처 권한·외부 트래픽·
 
 FAIL은 0이어야 하며, 도구·트래픽 부족으로 발생한 필수 SKIP은 환경을 갖춰 재실행해 해소해야 완료 기준을 충족한다.
 
-- **최신 로컬 판정(macOS, ICMP·5종 스크립트 확장 후)**: `./scripts/verify.sh` 정적·모의 검사 `PASS 4 / FAIL 0 / SKIP 2`(실기 2건 SKIP), 기존 캡처 `com-net-analysis-01/trace.pcap`에서 ICMP `type=11` `[Quoted]` 파싱 확인.
+- **최신 로컬 판정(macOS, TUI 추가 후)**: `./scripts/verify.sh` 정적·모의 검사 `PASS 4 / FAIL 0 / SKIP 2`(실기 2건 SKIP), `python3 src/tui.py --selfcheck` 통과, PTY 인터랙티브 `curses` 렌더링(데모·`com-net-analysis-01/{dns,http,trace}.pcap`) 및 `check_docs.py` 0건 통과.
 - **직전 Linux 실기 판정(확장 전 기준)**: Ubuntu 24.04(`eth0`) `PASS 18 / FAIL 0 / SKIP 0`.
 - **Linux 실기 재확인 필요(미확인 항목)**: 확장된 코드·스크립트로 Linux 실기 `./scripts/verify.sh eth0` 재실행, 정상 응답 대상(`PING_TARGET`, `TRACE_TARGET` 지정) 5종 수집 및 `traceroute` 최종 목적지 ICMP `Type 3 / Code 3` 확인, Wireshark 대조 검증.

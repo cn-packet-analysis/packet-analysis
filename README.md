@@ -2,7 +2,7 @@
 
 <img src="docs/assets/icon.png" alt="wirefish icon" width="96" />
 
-네트워크 프레임의 캡슐화와 계층별 프로토콜을 분석하는 수신 전용 패킷 캡처 CLI다. Ethernet·IPv4·ARP·TCP·UDP·ICMP 파싱, 포트 기반 HTTP·DNS 식별, pcap 저장을 지원한다([소스 구조](docs/03-tech/01-architecture.md#소스-구조)).
+네트워크 프레임의 캡슐화와 계층별 프로토콜을 분석하는 수신 전용 패킷 캡처 CLI·TUI 도구다. Ethernet·IPv4·ARP·TCP·UDP·ICMP 파싱, 포트 기반 HTTP·DNS 식별, pcap 저장, `curses` 기반 3-패널 TUI를 지원한다([소스 구조](docs/03-tech/01-architecture.md#소스-구조)).
 
 ![wirefish 핵심 기능](docs/assets/key-features.svg)
 
@@ -45,12 +45,32 @@ sudo python3 src/capture.py -i eth0 -p tcp --port 80 -c 20
 ./scripts/collect-analysis.sh eth0 /tmp/com-net-analysis-01
 ```
 
+### TUI 모드
+
+Wireshark 스타일 3-패널(패킷 목록·계층별 상세·Hex/ASCII 덤프) TUI는 Python 표준 `curses`만 사용하며 Linux와 macOS 터미널에서 바로 실행할 수 있다.
+
+```bash
+python3 src/tui.py                                  # 샘플 데모 패킷으로 즉시 체험
+python3 src/tui.py -r capture.pcap                  # 저장된 pcap 파일 오프라인 분석
+sudo python3 src/tui.py -i eth0 -p tcp -w out.pcap  # Linux 실시간 캡처 + pcap 저장
+```
+
+| 키 | 동작 |
+| --- | --- |
+| `↑`/`↓`, `j`/`k`, `PgUp`/`PgDn`, `g`/`G` | 활성 패널 이동·스크롤 |
+| `Tab` / `1`·`2`·`3` | 패킷 목록·계층별 상세·Hex/ASCII 패널 포커스 전환 |
+| `/` | 화면 내 검색·프로토콜 필터 입력(`Esc` 취소, 빈 입력 해제) |
+| `Space` | 실시간 캡처 일시정지·재개 |
+| `f` | 최신 패킷 자동 추적(Follow) 토글 |
+| `?` / `q` | 단축키 도움말 토글 / 종료(통계 출력) |
+
 ## 테스트
 
 일반 사용자 셸에서 실행한다(비-root 캡처 실패도 검증하므로 스크립트 자체를 root로 실행하지 않는다; 상세는 [검증 전략](docs/04-test/01-verification.md#검증-전략)).
 
 ```bash
 ./scripts/verify.sh
+python3 src/tui.py --selfcheck
 sudo -v && ./scripts/verify.sh eth0
 ```
 

@@ -2,24 +2,26 @@
 
 ## 개요
 
-원시 프레임의 캡슐화·프로토콜을 분석하는 3차 과제 패킷 수집·분석 CLI(`wirefish`) 구현 요구사항이다. `nslookup`, `curl`, `netstat`, `ping`, `traceroute` 5종 명령어의 패킷 수집과 프로토콜 파싱을 지원한다.
+원시 프레임의 캡슐화·프로토콜을 분석하는 3차 과제 패킷 수집·분석 CLI(`wirefish`)와 표준 라이브러리 기반 3-패널 TUI 구현 요구사항이다. `nslookup`, `curl`, `netstat`, `ping`, `traceroute` 5종 명령어의 패킷 수집과 프로토콜 파싱을 지원한다.
 
 ## 범위
 
 - 제외: 물리 신호, IPv6, GUI, 송신·주입·변조·재전송, IP 단편·TCP 스트림 재조립, 체크섬 검증, 무차별 모드, 페이로드 시그니처 식별.
 - IPv4 단편은 IPv4까지, TCP DNS는 TCP까지만 분석하며 체크섬은 원본 정수로 보존한다.
+- 선택 인터페이스인 터미널 3-패널 TUI(`src/tui.py`)는 기존 CLI 4파일과 분리해 제공하며, 실시간 캡처(Linux)·`.pcap` 파일 열기·샘플 데모 모드를 지원한다.
 
 ## 실행 환경과 제약
 
-- Python ≥3.10 표준 라이브러리만 사용한다(`scapy`·`libpcap`·`dpkt` 금지; `Wireshark`·`tcpdump`·`tshark`는 외부 검증 전용).
-- 실시간 캡처는 Linux에서 root 또는 `CAP_NET_RAW` 권한으로 실행하며, 무인자 자체 점검은 OS 무관하게 동작한다.
-- Python 소스는 4파일·총 500줄 이하로 유지하되 길이 검증·자체 점검·오류 처리·CLI·패킷 딕셔너리·질문/응답별 DNS 오류 메시지와 완성 계층 보존 동작을 유지한다.
+- Python ≥3.10 표준 라이브러리만 사용한다(`scapy`·`libpcap`·`dpkt` 금지, TUI도 `curses` 표준 라이브러리만 사용; `Wireshark`·`tcpdump`·`tshark`는 외부 검증 전용).
+- 실시간 캡처는 Linux에서 root 또는 `CAP_NET_RAW` 권한으로 실행하며, 무인자 자체 점검과 TUI의 `.pcap` 읽기·샘플 데모 모드는 OS 무관하게 동작한다.
+- 기존 CLI Python 소스 4파일(`capture.py`·`parse.py`·`output.py`·`selfcheck.py`)은 총 500줄 이하로 유지하되 길이 검증·자체 점검·오류 처리·CLI·패킷 딕셔너리·질문/응답별 DNS 오류 메시지와 완성 계층 보존 동작을 유지한다.
 - 소스 코드와 실행·검증 스크립트만 유지하며 빌드·실행 생성 파일(`__pycache__`, `*.pcap` 등)은 포함하지 않는다.
 
 ## 기능 요구사항
 
 - 필수(F-1~6): 인터페이스 실시간 수신 → Ethernet 헤더·타입 → IPv4·ARP → TCP·UDP·ICMP(`type`·`code`·`csum`, Echo `id`·`seq`, Type 3/11 내부 인용 IPv4·UDP/TCP 헤더) 파싱 → 포트 기반 HTTP·DNS 식별·요약 → 프로토콜·주소·포트 필터(ICMP 인용 IPv4·포트 포함).
 - 권장(F-7~8): 종료 시 프로토콜별 통계 출력 및 pcap 저장.
+- 확장(TUI): Wireshark 스타일 3-패널(패킷 목록·계층별 상세·Hex/ASCII 덤프) 화면에서 실시간 캡처(`-i`)·저장된 `.pcap` 파일(`-r`)·샘플 데모 패킷을 탐색하고 기존 필터·통계·pcap 저장 기능을 함께 사용한다.
 
 ## 출력과 오류 처리
 
