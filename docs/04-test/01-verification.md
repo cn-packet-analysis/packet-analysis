@@ -4,7 +4,7 @@
 
 ## 검증 전략
 
-CI는 무인자 자체 점검을 실행하며, 캡처 권한·외부 트래픽·`tshark`·Wireshark가 필요한 실기 검사는 Linux에서 별도 수행한다.
+CI는 무인자 자체 점검(`capture.py`), TUI 자체 점검(`tui.py --selfcheck`), 오프라인 정적·모의 검사(`verify.sh --offline`)를 실행하며, 캡처 권한·외부 트래픽·`tshark`·Wireshark가 필요한 실기 검사는 Linux에서 별도 수행한다.
 
 ### OS 공통 검사
 
@@ -33,6 +33,6 @@ TUI는 `python3 src/tui.py --selfcheck`로 `.pcap` 리더(리틀/빅 엔디언·
 
 FAIL은 0이어야 하며, 도구·트래픽 부족으로 발생한 필수 SKIP은 환경을 갖춰 재실행해 해소해야 완료 기준을 충족한다.
 
-- **최신 로컬 판정(macOS, TUI 추가 후)**: `./scripts/verify.sh` 정적·모의 검사 `PASS 4 / FAIL 0 / SKIP 2`(실기 2건 SKIP), `python3 src/tui.py --selfcheck` 통과, PTY 인터랙티브 `curses` 렌더링(데모·`com-net-analysis-01/{dns,http,trace}.pcap`) 및 `check_docs.py` 0건 통과.
+- **최신 로컬 판정(Linux 오프라인·PTY 검증)**: `./scripts/verify.sh --offline` 정적·모의 검사 `PASS 5 / FAIL 0 / SKIP 2`(실기 2건 SKIP), `python3 src/capture.py`·`python3 src/tui.py --selfcheck` 통과(CLI 4파일 487줄), PTY 인터랙티브 렌더링(`xterm-256color`/`vt100`/`dumb`, 80×24·60×16 한글 폭·오프라인 SSH `.pcap`) 및 `check_docs.py` 0건 통과.
 - **직전 Linux 실기 판정(확장 전 기준)**: Ubuntu 24.04(`eth0`) `PASS 18 / FAIL 0 / SKIP 0`.
 - **Linux 실기 재확인 필요(미확인 항목)**: 확장된 코드·스크립트로 Linux 실기 `./scripts/verify.sh eth0` 재실행, 정상 응답 대상(`PING_TARGET`, `TRACE_TARGET` 지정) 5종 수집 및 `traceroute` 최종 목적지 ICMP `Type 3 / Code 3` 확인, Wireshark 대조 검증.

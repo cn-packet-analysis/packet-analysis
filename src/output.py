@@ -59,7 +59,9 @@ def summary(pkt):
                 tail.append(f"orig={q['src']}→{q['dst']}" + (f":{q['dport']}" if "dport" in q else ""))
         tail.append(f"len={n}")
     elif arp:
-        tail = ["request" if arp["opcode"] == 1 else "reply", "who-has", arp["tpa"]]
+        tail = (["request", "who-has", arp["tpa"]] if arp["opcode"] == 1 else
+                ["reply", arp["spa"], "is-at", arp["sha"]] if arp["opcode"] == 2 else
+                [f"opcode={arp['opcode']}", arp["spa"], "→", arp["tpa"]])
     elif ip:
         frag = ip["frag_off"] or ip["flags"] & 1
         tail = ["frag" if frag else f"proto={ip['proto']}", f"len={n}"]
@@ -92,7 +94,7 @@ class Stats:
         self.n[next((k for k in COUNTERS if k in pkt), "other")] += 1
     def line(self):
         return f"captured {self.captured}  |  {'  '.join(f'{LABEL.get(k, k)} {self.n[k]}' for k in COUNTERS)}"
-def match(pkt, opts):
+def match(pkt, opts, exclude_ssh=True):
     if opts.proto and opts.proto not in pkt:
         return False
     q = pkt.get("icmp", {}).get("quoted", {})
@@ -101,4 +103,4 @@ def match(pkt, opts):
         if opts.host not in (ip.get("src"), ip.get("dst"), arp.get("spa"), arp.get("tpa"), q.get("src"), q.get("dst")):
             return False
     ports = [d[f] for d in (pkt.get("tcp"), pkt.get("udp"), q) if d for f in ("sport", "dport") if f in d]
-    return 22 not in ports if opts.port is None else opts.port in ports
+    return (22 not in ports if exclude_ssh else True) if opts.port is None else opts.port in ports

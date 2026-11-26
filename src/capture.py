@@ -45,6 +45,8 @@ def main():
     ap.add_argument("-v", dest="verbose", action="store_true", help="계층별 상세 출력")
     ap.add_argument("-w", dest="pcap", help="필터를 통과한 패킷을 pcap으로 저장")
     opts = ap.parse_args()
+    if opts.count is not None and opts.count <= 0:
+        sys.exit("-c 값은 1 이상이어야 합니다")
     if not opts.iface:
         import selfcheck
         return selfcheck.run()

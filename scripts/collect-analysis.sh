@@ -75,7 +75,9 @@ done
 wait "$curl_pid"; curl_pid=''
 finish_capture http
 stream=$(tshark -r "$out/http.pcap" -Y "http.host == \"$HTTP_HOST\"" -T fields -e tcp.stream 2>> "$out/http.tshark.err" | sort -nu | sed -n '1p')
-[ -n "$stream" ] && tshark -r "$out/http.pcap" -q -z "follow,tcp,ascii,$stream" > "$out/http.stream.txt" 2>> "$out/http.tshark.err"
+if [ -n "$stream" ]; then
+  tshark -r "$out/http.pcap" -q -z "follow,tcp,ascii,$stream" > "$out/http.stream.txt" 2>> "$out/http.tshark.err"
+fi
 
 capture_run ping ping timeout 8 ping -4 -c 5 -i 0.5 "$PING_TARGET"
 capture_run trace traceroute timeout 10 traceroute -4 -n -m "$TRACE_HOPS" -q "$TRACE_PROBES" -w 1 "$TRACE_TARGET"

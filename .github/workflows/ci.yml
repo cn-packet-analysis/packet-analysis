@@ -23,3 +23,7 @@ jobs:
           python-version: "3.10"
       - name: Offline packet parser self-check
         run: python src/capture.py
+      - name: Offline TUI self-check
+        run: python src/tui.py --selfcheck
+      - name: Offline static and mock verification
+        run: bash scripts/verify.sh --offline

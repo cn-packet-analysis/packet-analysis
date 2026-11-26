@@ -50,6 +50,8 @@ def run():
         1, "aa:bb:cc:dd:ee:ff", "00:00:00:00:00:00", "192.168.0.5", "192.168.0.1")
     line = _show(parse(0.0, ARP_REQ))[0].rstrip("\n")
     assert "\n" not in line and len(MAC.findall(line)) == 2, line
+    assert "reply  192.168.0.5  is-at  aa:bb:cc:dd:ee:ff" in output.summary(parse(0.0, arp(op=2)))
+    assert "opcode=3" in output.summary(parse(0.0, arp(op=3)))
     for bad in (arp(htype=6), arp(ptype=0x86DD), arp(cut=1)):
         err(bad, ["eth", "arp"])
     p = ok(ICMP_ECHO, ["eth", "ipv4", "icmp"])
@@ -65,6 +67,8 @@ def run():
                                         "id": 0x1c46, "sport": 51000, "dport": 33434}
         assert "[Quoted]" in output.detail(qp) and "33434" in output.detail(qp) and "orig=" in output.summary(qp)
     assert "quoted" not in ok(ip4(1, struct.pack("!BBHI", 11, 0, 0, 0) + b"\x00" * 4), ["eth", "ipv4", "icmp"])["icmp"]
+    qfrag = ok(ip4(1, struct.pack("!BBHI", 11, 0, 0, 0) + ip4(17, b"\xaa\xbb\xcc\xdd", frag=10)[14:42]), ["eth", "ipv4", "icmp"])
+    assert "quoted" in qfrag["icmp"] and "sport" not in qfrag["icmp"]["quoted"]
     for bad in (TRUNCATED, ip4(1, b"", ihl=4), ip4(1, b"\x08\x00\x00\x00", ihl=6),
                 ip4(1, b"\x08\x00\x00\x00", tlen=8), ip4(1, b"\x08\x00\x00\x00", tlen=999)):
         err(bad, ["eth", "ipv4"])
@@ -140,8 +144,11 @@ def run():
     q_pkt = parse(0.0, ip4(1, struct.pack("!BBHI", 11, 0, 0, 0) + probe[14:42], src="192.168.0.1", dst="192.168.0.5"))
     opts.host, opts.port = "8.8.8.8", 33434
     assert output.match(q_pkt, opts) and not output.match(parse(0.0, ICMP_ECHO), opts)
+    assert r"a\xffb" in output.detail(parse(0.0, ip4(17, udp(dns(qname=b"\x03a\xffb\x00"))))) and r"a\\xffb" not in output.detail(parse(0.0, ip4(17, udp(dns(qname=b"\x03a\xffb\x00")))))
     opts.host, opts.port = None, 80
     assert output.match(parse(0.0, TCP_SYN), opts) and not output.match(parse(0.0, ICMP_ECHO), opts)
+    opts.port = None
+    assert output.match(parse(0.0, ip4(6, tcp(sport=22))), opts, exclude_ssh=False)
     print("selfcheck: all checks passed")
 if __name__ == "__main__":
     run()

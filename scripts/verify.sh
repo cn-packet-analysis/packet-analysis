@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 리눅스 실기 검증. docs/01-func/01-requirements.md 완료 정의와 필터·통계·장애 주입을 한 번에 돌린다.
-#   ./scripts/verify.sh [iface]      root로 실행하지 말 것 — 비-root 실패 경로를 확인한다.
+#   ./scripts/verify.sh [iface|--offline]   root로 실행하지 말 것 — 비-root 실패 경로를 확인한다.
 # 정답지는 tshark. 기대값의 사본은 여기 하나뿐이다 — 문서로 옮겨 적지 않는다.
 # ponytail: set -e 대신 검사마다 && 체인. -e는 if 조건 안에서 어차피 꺼져 헛된 안심만 준다.
 set -uo pipefail
@@ -46,12 +46,14 @@ no_send() {   # '! grep'은 파일 없음(코드 2)까지 통과로 뒤집는다
   test "$rc" -eq 1                                  # 0=송신 호출 발견, 2=읽기 오류, 1=없음
 }
 selfcheck() { python3 src/capture.py >/dev/null; }
+tui_selfcheck() { python3 src/tui.py --selfcheck >/dev/null; }
 missing_tools() {
   local tool
   for tool in "$@"; do command -v "$tool" >/dev/null || printf '%s ' "$tool"; done
 }
 try '완료정의5  소켓 송신 호출 없음' no_send
 try '완료정의4  무인자 자체 점검' selfcheck
+try 'TUI  오프라인 자체 점검' tui_selfcheck
 local_checks() {
   PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
 import contextlib, io, os, pathlib, struct, subprocess, sys, tempfile
@@ -136,6 +138,11 @@ def expect_err(exc_type, fn, *args):
     except exc_type as e:
         return e
     raise AssertionError(f'expected {exc_type.__name__}')
+
+for bad_c in ('0', '-1'):
+    with patch('sys.argv', ['capture.py', '-i', 'test0', '-c', bad_c]):
+        e = expect_err(SystemExit, capture.main)
+        assert isinstance(e.code, str) and len(e.code.splitlines()) == 1
 
 writer = Mock()
 with patch('sys.argv', ['capture.py', '-i', 'bad0', '-w', 'unused']), \
@@ -234,11 +241,13 @@ echo 'captured 1'
     session = evidence / 'netstat.txt'
     session.write_text('tcp 0 0 192.168.0.5:52134 8.8.8.8:80 TIME_WAIT\n')
     verifier = pathlib.Path('scripts/verify.sh').read_text().split('python3 - "$T/analysis" <<\'PY\'\n')[1].split('\nPY\n')[0]
-    def judge():
+    def judge(**extra):
         return subprocess.run([sys.executable, '-', str(evidence)], input=verifier,
-                              env=env, capture_output=True, text=True, timeout=10)
+                              env=dict(env, **extra), capture_output=True, text=True, timeout=10)
     checked = judge()
     assert checked.returncode == 0, checked.stderr
+    assert judge(TRACE_TARGET='1.1.1.1').returncode != 0
+    assert judge(DNS_TARGET='other.example').returncode != 0
     session.write_text('tcp 0 0 192.168.0.5:9999 8.8.8.8:80 TIME_WAIT\n')
     assert judge().returncode != 0
     session.write_text('tcp 0 0 192.168.0.5:52134 8.8.8.8:80 ESTABLISHED\n')
@@ -253,15 +262,25 @@ PY
 try '소스 500줄·모의 캡처·pcap·오류 정리·분석 수집/판정' local_checks
 try '분석 수집 스크립트 문법' bash -n scripts/collect-analysis.sh
 
-IFACE=${1:-$(ip route 2>/dev/null | awk '/^default/{print $5; exit}')}
+OFFLINE=0
+if [ "${1:-}" = '--offline' ]; then
+  OFFLINE=1
+  IFACE=''
+else
+  IFACE=${1:-$(ip route 2>/dev/null | awk '/^default/{print $5; exit}')}
+fi
 GW=$(ip route 2>/dev/null | awk '/^default/{print $3; exit}')
 lack=$(missing_tools tshark dig curl arping ping)
 
-if [ -z "$IFACE" ] || [ -n "$lack" ]; then
+if [ "$OFFLINE" -eq 1 ] || [ -z "$IFACE" ] || [ -n "$lack" ]; then
   say '실기 검증 생략'
-  [ -z "$IFACE" ] && echo '  인터페이스를 못 찾았다. ip -br link 로 확인 후 ./scripts/verify.sh <iface>'
-  [ -n "$lack" ] && echo "  없는 도구: $lack"
-  meh '실기 검증 전체' '리눅스 환경이 아니거나 도구가 없다'
+  if [ "$OFFLINE" -eq 1 ]; then
+    meh '실기 검증 전체' '--offline 모드'
+  else
+    [ -z "$IFACE" ] && echo '  인터페이스를 못 찾았다. ip -br link 로 확인 후 ./scripts/verify.sh <iface>'
+    [ -n "$lack" ] && echo "  없는 도구: $lack"
+    meh '실기 검증 전체' '리눅스 환경이 아니거나 도구가 없다'
+  fi
 else
   say "실기 검증 — iface=$IFACE gw=${GW:-없음}"
   sudo -v || { echo '  sudo 실패. setcap cap_net_raw+ep $(which python3) 도 가능'; exit 1; }
@@ -341,16 +360,22 @@ fi
 stop_traffic
 say '과제 명령어 연계 검증'
 analysis_tools=$(missing_tools nslookup curl netstat ping traceroute tshark timeout ip sudo)
-if [ "$(uname -s)" != Linux ] || [ -z "$IFACE" ] || [ -n "$analysis_tools" ]; then
-  meh 'nslookup·curl·netstat·ping·traceroute 실기' "Linux·인터페이스 또는 도구 부족:$analysis_tools"
+if [ "$OFFLINE" -eq 1 ] || [ "$(uname -s)" != Linux ] || [ -z "$IFACE" ] || [ -n "$analysis_tools" ]; then
+  if [ "$OFFLINE" -eq 1 ]; then
+    meh 'nslookup·curl·netstat·ping·traceroute 실기' '--offline 모드'
+  else
+    meh 'nslookup·curl·netstat·ping·traceroute 실기' "Linux·인터페이스 또는 도구 부족:$analysis_tools"
+  fi
 else
   analysis_checks() {
     ./scripts/collect-analysis.sh "$IFACE" "$T/analysis" || return 1
     PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" python3 - "$T/analysis" <<'PY'
-import pathlib, re, struct, subprocess, sys
+import os, pathlib, re, struct, subprocess, sys
 from parse import parse
 
 root = pathlib.Path(sys.argv[1])
+dns_target = os.environ.get('DNS_TARGET', 'example.com').rstrip('.')
+trace_target = os.environ.get('TRACE_TARGET', '8.8.8.8')
 def packets(name):
     data = (root / (name + '.pcap')).read_bytes()
     assert len(data) >= 24 and data[:4] == b'\xd4\xc3\xb2\xa1', name
@@ -367,7 +392,7 @@ def packets(name):
 
 for name in ('nslookup', 'curl', 'ping', 'traceroute'):
     assert (root / (name + '.exit')).read_text().strip() == '0', name + ' failed'
-dns = [p['dns'] for p in packets('dns') if 'dns' in p and p['dns']['qname'] == 'example.com']
+dns = [p['dns'] for p in packets('dns') if 'dns' in p and p['dns']['qname'] == dns_target]
 assert any(not d['flags'] & 0x8000 for d in dns), 'DNS query missing'
 answers = [a for d in dns if d['flags'] & 0x8000 for a in d['answers']]
 assert answers and all(a in (root / 'nslookup.txt').read_text() for a in answers), 'DNS answer mismatch'
@@ -387,14 +412,14 @@ reqs = {(d['id'], d['seq']) for d in pings if d['type'] == 8}
 reps = {(d['id'], d['seq']) for d in pings if d['type'] == 0}
 assert reqs and (reqs & reps), 'matching ICMP Echo request/reply pair missing'
 trace = packets('trace')
-assert any(p.get('ipv4', {}).get('dst') == '8.8.8.8' and
+assert any(p.get('ipv4', {}).get('dst') == trace_target and
            33434 <= p.get('udp', {}).get('dport', 0) <= 33534 for p in trace), 'traceroute UDP probe missing'
 assert any(p.get('icmp', {}).get('type') in (11, 3) and
-           p['icmp'].get('quoted', {}).get('dst') == '8.8.8.8' and
+           p['icmp'].get('quoted', {}).get('dst') == trace_target and
            33434 <= p['icmp'].get('quoted', {}).get('dport', 0) <= 33534
            for p in trace), 'ICMP response quoting traceroute probe missing (parser)'
 quoted = subprocess.run(['tshark', '-r', str(root / 'trace.pcap'), '-Y',
-                         '(icmp.type == 11 || icmp.type == 3) && ip.dst == 8.8.8.8 && udp.dstport >= 33434 && udp.dstport <= 33534',
+                         f'(icmp.type == 11 || icmp.type == 3) && ip.dst == {trace_target} && udp.dstport >= 33434 && udp.dstport <= 33534',
                          '-T', 'fields', '-e', 'frame.number'], capture_output=True, text=True, check=True)
 assert quoted.stdout.strip(), 'ICMP response quoting traceroute probe missing (tshark)'
 PY

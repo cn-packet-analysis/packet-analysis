@@ -4,7 +4,7 @@
 기존 CLI 4파일(capture/parse/output/selfcheck)의 파싱·필터·통계·pcap 저장을
 그대로 재사용하며 실시간 캡처(-i), pcap 오프라인 분석(-r), 샘플 데모(--demo)를 제공한다.
 """
-import argparse, curses, locale, os, queue, socket, struct, sys, tempfile, threading, time, types
+import argparse, curses, locale, os, queue, socket, struct, sys, tempfile, threading, time, types, unicodedata
 from contextlib import ExitStack, closing
 from dataclasses import dataclass
 
@@ -49,6 +49,30 @@ HELP_LINES = (
 
 def _clamp(val, hi):
     return max(0, min(hi, val))
+
+def _char_width(ch):
+    if unicodedata.combining(ch) or unicodedata.category(ch) in ("Mn", "Me", "Cf"):
+        return 0
+    return 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+
+def _disp_width(text):
+    return sum(_char_width(ch) for ch in text)
+
+def _clip_cols(text, max_cols):
+    if max_cols <= 0:
+        return ""
+    out, cols = [], 0
+    for ch in text:
+        w = _char_width(ch)
+        if cols + w > max_cols:
+            break
+        out.append(ch)
+        cols += w
+    return "".join(out)
+
+def _pad_cols(text, cols):
+    clipped = _clip_cols(text, cols)
+    return clipped + " " * max(0, cols - _disp_width(clipped))
 
 @dataclass(slots=True)
 class PacketRecord:
@@ -313,7 +337,7 @@ class LiveCapture:
 
     def __init__(self, sock, opts, writer=None):
         self.sock, self.opts, self.writer = sock, opts, writer
-        self.queue = queue.Queue(maxsize=4096)
+        self.queue = queue.Queue()
         self.stop_event, self.pause_event = threading.Event(), threading.Event()
         self.error, self.done = None, False
         self._thread = threading.Thread(target=self._run, name="wirefish-live", daemon=True)
@@ -329,6 +353,15 @@ class LiveCapture:
         self.stop_event.set()
         if self._thread.is_alive():
             self._thread.join(timeout=1.0)
+
+    def drain_to(self, state, limit=None):
+        count = 0
+        while limit is None or count < limit:
+            try:
+                state.add_packet(*self.queue.get_nowait())
+                count += 1
+            except queue.Empty:
+                break
 
     def _run(self):
         captured = 0
@@ -347,10 +380,7 @@ class LiveCapture:
                 if self.writer:
                     self.writer.write(ts, raw)
                 captured += 1
-                try:
-                    self.queue.put((ts, raw, pkt), timeout=0.1)
-                except queue.Full:
-                    pass
+                self.queue.put_nowait((ts, raw, pkt))
                 if self.opts.count and captured >= self.opts.count:
                     break
         except OSError as exc:
@@ -364,16 +394,23 @@ def _safe_addstr(win, y, x, text, attr=0):
     if not (0 <= y < max_y and x < max_x):
         return
     if x < 0:
-        text, x = text[-x:], 0
+        skip, idx = -x, 0
+        while idx < len(text) and skip > 0:
+            skip -= _char_width(text[idx])
+            idx += 1
+        text, x = text[idx:], max(0, -skip)
     limit = max_x - x - (y == max_y - 1)
-    if limit > 0:
+    clipped = _clip_cols(text, limit)
+    if clipped:
         try:
-            win.addnstr(y, x, text, limit, attr)
+            win.addstr(y, x, clipped, attr)
         except curses.error:
             pass
 
 def _fill_line(win, y, text, attr):
-    _safe_addstr(win, y, 0, text.ljust(win.getmaxyx()[1]), attr)
+    max_y, max_x = win.getmaxyx()
+    limit = max_x - (y == max_y - 1)
+    _safe_addstr(win, y, 0, _pad_cols(text, limit), attr)
 
 class CursesApp:
     """Wireshark 스타일 3-패널 curses UI."""
@@ -473,8 +510,8 @@ class CursesApp:
         return rows
 
     def _draw_help_overlay(self, win, max_y, max_x):
-        box_w = min(max_x - 4, max(len(x) for x in HELP_LINES) + 4)
-        box_h = min(max_y - 2, len(HELP_LINES) + 2)
+        box_w = max(4, min(max_x - 4, max(_disp_width(x) for x in HELP_LINES) + 4))
+        box_h = max(3, min(max_y - 2, len(HELP_LINES) + 2))
         top, left = max(0, (max_y - box_h) // 2), max(0, (max_x - box_w) // 2)
         border = ("+" + "-" * (box_w - 2) + "+")[:box_w]
         for row in range(box_h):
@@ -482,16 +519,12 @@ class CursesApp:
         _safe_addstr(win, top, left, border, self._c("bar", curses.A_BOLD))
         _safe_addstr(win, top + box_h - 1, left, border, self._c("bar", curses.A_BOLD))
         for i, text in enumerate(HELP_LINES[:box_h - 2]):
-            _safe_addstr(win, top + 1 + i, left + 1, text.ljust(box_w - 2), curses.A_REVERSE)
+            _safe_addstr(win, top + 1 + i, left + 1, _pad_cols(text, box_w - 2), curses.A_REVERSE)
 
     def _drain_live(self):
         if not self.live:
             return
-        for _ in range(256):
-            try:
-                self.state.add_packet(*self.live.queue.get_nowait())
-            except queue.Empty:
-                break
+        self.live.drain_to(self.state, limit=256)
         if self.live.error:
             self.state.notice = f"수신 오류: {self.live.error}"
         if self.live.done:
@@ -546,7 +579,10 @@ class CursesApp:
         return True
 
     def run(self, stdscr):
-        curses.curs_set(0)
+        try:
+            curses.curs_set(0)
+        except curses.error:
+            pass
         stdscr.keypad(True)
         stdscr.timeout(100)
         self._init_colors()
@@ -571,7 +607,9 @@ class CursesApp:
             status = "PAUSED" if st.paused else ("DONE" if st.done else "CAPTURING")
             top_l = f" wirefish TUI | {st.mode}: {st.source_label} | filter: {self._filter_badge()}"
             top_r = f"[{status}] "
-            _fill_line(stdscr, 0, top_l + " " * max(1, max_x - len(top_l) - len(top_r)) + top_r, self._c("bar", curses.A_BOLD))
+            top_l_fit = _clip_cols(top_l, max(0, max_x - _disp_width(top_r) - 1))
+            gap = max(1, max_x - _disp_width(top_l_fit) - _disp_width(top_r))
+            _fill_line(stdscr, 0, top_l_fit + " " * gap + top_r, self._c("bar", curses.A_BOLD))
 
             list_rows = self._draw_list_panel(stdscr, ly, lh, max_x)
             detail_rows = self._draw_text_panel(
@@ -664,6 +702,23 @@ def run_selfcheck():
         time.sleep(0.02)
     live.stop()
     assert live.done and live.error is None and live.queue.qsize() == 3
+    import selfcheck as sc
+    ssh_pkt = parse(0.0, sc.ip4(6, sc.tcp(sport=54321, dport=22, flags=0x02)))
+    assert output.match(ssh_pkt, opts, exclude_ssh=False) and not output.match(ssh_pkt, opts, exclude_ssh=True)
+    assert _disp_width("a한b") == 4 and _clip_cols("a한b", 2) == "a" and _disp_width(_pad_cols("한글", 5)) == 5
+    with tempfile.TemporaryDirectory() as td:
+        live_pcap = os.path.join(td, "live300.pcap")
+        with closing(capture.PcapWriter(live_pcap)) as w:
+            live300 = LiveCapture(_FakeSock([samples[4][1]] * 300), types.SimpleNamespace(proto=None, host=None, port=None, count=300), writer=w)
+            live300.start()
+            deadline = time.time() + 2.0
+            while not live300.done and time.time() < deadline:
+                time.sleep(0.01)
+            live300.stop()
+            st300 = TuiState("LIVE", "fake0", opts)
+            live300.drain_to(st300, limit=256)
+            live300.drain_to(st300)
+        assert st300.stats.captured == len(read_pcap(live_pcap)) == 300
     print("tui selfcheck: all checks passed")
 
 def build_parser():
@@ -698,6 +753,7 @@ def main(argv=None):
                 state = TuiState("LIVE", opts.iface, opts, notice=notice)
                 live = LiveCapture(sock, opts, writer=writer)
                 live.start()
+                stack.callback(live.drain_to, state)
                 stack.callback(live.stop)
             else:
                 if opts.read_pcap:
@@ -707,7 +763,7 @@ def main(argv=None):
                 state = TuiState(mode, label, opts, notice=notice)
                 for ts, raw in frames:
                     pkt = parse(ts, raw)
-                    if not output.match(pkt, opts):
+                    if not output.match(pkt, opts, exclude_ssh=False):
                         continue
                     state.add_packet(ts, raw, pkt)
                     if writer:

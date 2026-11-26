@@ -63,12 +63,12 @@ def parse_icmp(data, pkt):
         rest = data[8:]
     elif typ in (3, 11) and len(data) >= 28:
         inner = data[8:]
-        v_ihl, _, _, ident, _, ttl, proto, _, src, dst = struct.unpack_from("!BBHHHBBH4s4s", inner)
+        v_ihl, _, _, ident, ff, ttl, proto, _, src, dst = struct.unpack_from("!BBHHHBBH4s4s", inner)
         ihl = v_ihl & 0x0F
         if v_ihl >> 4 == 4 and ihl >= 5 and len(inner) >= ihl * 4:
             q = {"src": socket.inet_ntoa(src), "dst": socket.inet_ntoa(dst),
                  "ttl": ttl, "proto": proto, "id": ident}
-            if proto in (6, 17) and len(inner) >= ihl * 4 + 4:
+            if not (ff & 0x1FFF) and proto in (6, 17) and len(inner) >= ihl * 4 + 4:
                 q["sport"], q["dport"] = struct.unpack_from("!HH", inner, ihl * 4)
             d["quoted"], rest = q, inner
     pkt["icmp"] = d
@@ -103,7 +103,7 @@ def _qname(msg, off):
             return ".".join(labels) or ".", end or off
         if off + n > len(msg):
             raise ValueError("truncated label")
-        labels.append(msg[off:off + n].decode("ascii", "backslashreplace"))
+        labels.append(msg[off:off + n].decode("latin-1"))
         off += n
 def parse_dns(data, pkt):
     ident, flags, qd, an, ns, ar = _header("!6H", data)
