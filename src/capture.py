@@ -69,7 +69,7 @@ def main():
             except KeyboardInterrupt:
                 pass
     except OSError as e:
-        sys.exit("캡처 실패 (Linux·인터페이스·권한·파일 확인): %s" % esc(str(e)))
+        sys.exit(f"캡처 실패 (Linux·인터페이스·권한·파일 확인): {esc(str(e))}")
     print(stats.line())
 
 if __name__ == "__main__":

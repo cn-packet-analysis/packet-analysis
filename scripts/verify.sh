@@ -130,39 +130,32 @@ with patch('capture.PcapWriter', return_value=writer):
     assert run(['-w', 'unused'], sock)[0] == 1
 writer.close.assert_called_once()
 
+def expect_err(exc_type, fn, *args):
+    try:
+        fn(*args)
+    except exc_type as e:
+        return e
+    raise AssertionError(f'expected {exc_type.__name__}')
+
 writer = Mock()
 with patch('sys.argv', ['capture.py', '-i', 'bad0', '-w', 'unused']), \
      patch('capture.PcapWriter', return_value=writer), \
      patch('capture.open_socket', side_effect=OSError('open failed')):
-    try:
-        capture.main()
-    except SystemExit as e:
-        assert isinstance(e.code, str) and len(e.code.splitlines()) == 1
-    else:
-        raise AssertionError('socket open must fail')
+    e = expect_err(SystemExit, capture.main)
+    assert isinstance(e.code, str) and len(e.code.splitlines()) == 1
 writer.close.assert_called_once()
 
 sock = Mock()
 sock.bind.side_effect = OSError('bad interface')
 with patch('capture.sys.platform', 'linux'), patch('capture.socket.AF_PACKET', 17, create=True), \
      patch('capture.socket.socket', return_value=sock):
-    try:
-        capture.open_socket('bad0')
-    except OSError:
-        pass
-    else:
-        raise AssertionError('bind must fail')
+    expect_err(OSError, capture.open_socket, 'bad0')
 sock.close.assert_called_once()
 
 f = Mock()
 f.write.side_effect = OSError('header write failed')
 with patch('builtins.open', return_value=f):
-    try:
-        capture.PcapWriter('unused')
-    except OSError:
-        pass
-    else:
-        raise AssertionError('header write must fail')
+    expect_err(OSError, capture.PcapWriter, 'unused')
 f.close.assert_called_once()
 
 # 네트워크 없이 수집·명령어 실패 보존·캡처 실패·덮어쓰기 방지를 검사한다.

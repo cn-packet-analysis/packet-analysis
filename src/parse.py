@@ -2,17 +2,15 @@
 완성한 계층만 pkt에 대입. 미지원은 None, 잘못된 입력은 ValueError.
 """
 import socket, struct
-def esc(s, space=" "):
-    return s.encode("unicode_escape").decode("ascii").replace(" ", space)
+def esc(s):
+    return s.encode("unicode_escape").decode("ascii")
 def _header(fmt, data, offset=0, *, error="truncated"):
     if len(data) < offset + struct.calcsize(fmt):
         raise ValueError(error)
     return struct.unpack_from(fmt, data, offset)
 def _app(layer, sport, dport, rest):
-    if not rest:
-        return None, rest
     ports = PORTMAP[layer]
-    return ports.get(dport) or ports.get(sport), rest
+    return (ports.get(dport) or ports.get(sport)) if rest else None, rest
 def parse_eth(data, pkt):
     dst, src, etype = _header("!6s6sH", data)
     pkt["eth"] = {"src": src.hex(":"), "dst": dst.hex(":"), "type": etype}
@@ -65,11 +63,12 @@ def parse_icmp(data, pkt):
         rest = data[8:]
     elif typ in (3, 11) and len(data) >= 28:
         inner = data[8:]
-        ihl = inner[0] & 0x0F
-        if inner[0] >> 4 == 4 and ihl >= 5 and len(inner) >= ihl * 4:
-            q = {"src": socket.inet_ntoa(inner[12:16]), "dst": socket.inet_ntoa(inner[16:20]),
-                 "ttl": inner[8], "proto": inner[9], "id": struct.unpack_from("!H", inner, 4)[0]}
-            if q["proto"] in (6, 17) and len(inner) >= ihl * 4 + 4:
+        v_ihl, _, _, ident, _, ttl, proto, _, src, dst = struct.unpack_from("!BBHHHBBH4s4s", inner)
+        ihl = v_ihl & 0x0F
+        if v_ihl >> 4 == 4 and ihl >= 5 and len(inner) >= ihl * 4:
+            q = {"src": socket.inet_ntoa(src), "dst": socket.inet_ntoa(dst),
+                 "ttl": ttl, "proto": proto, "id": ident}
+            if proto in (6, 17) and len(inner) >= ihl * 4 + 4:
                 q["sport"], q["dport"] = struct.unpack_from("!HH", inner, ihl * 4)
             d["quoted"], rest = q, inner
     pkt["icmp"] = d
@@ -91,8 +90,7 @@ def _qname(msg, off):
             if off + 1 >= len(msg):
                 raise ValueError("truncated pointer")
             ptr = ((n & 0x3F) << 8) | msg[off + 1]
-            if end is None:
-                end = off + 2
+            end = end or off + 2
             if ptr in seen:
                 raise ValueError("qname pointer loop")
             seen.add(ptr)
@@ -102,25 +100,24 @@ def _qname(msg, off):
             raise ValueError("bad label length")
         off += 1
         if n == 0:
-            return ".".join(labels) or ".", end if end is not None else off
+            return ".".join(labels) or ".", end or off
         if off + n > len(msg):
             raise ValueError("truncated label")
         labels.append(msg[off:off + n].decode("ascii", "backslashreplace"))
         off += n
 def parse_dns(data, pkt):
     ident, flags, qd, an, ns, ar = _header("!6H", data)
-    qname = qtype = None
-    end = 12
+    qname, qtype, end = None, None, 12
     for i in range(qd):                             # 첫 질문만 요약. 나머지는 길이 검증
         name, end = _qname(data, end)
-        typ, cls = _header("!HH", data, end, error="truncated question")
+        typ, _ = _header("!HH", data, end, error="truncated question")
         if i == 0:
             qname, qtype = name, typ
         end += 4
     answers = []
     for _ in range(an):
         _, end = _qname(data, end)
-        typ, cls, ttl, size = _header("!HHIH", data, end, error="truncated answer header")
+        typ, cls, _, size = _header("!HHIH", data, end, error="truncated answer header")
         end += 10
         if end + size > len(data):
             raise ValueError("truncated answer data")
@@ -137,13 +134,11 @@ PARSERS = {"eth": parse_eth, "ipv4": parse_ipv4, "arp": parse_arp,
            "http": parse_http, "dns": parse_dns, "tls": parse_tls}
 ETHERTYPE = {0x0800: "ipv4", 0x0806: "arp"}         # 그 외 → None
 IPPROTO = {1: "icmp", 6: "tcp", 17: "udp"}
-PORTMAP = {"tcp": {80: "http", 8080: "http", 443: "tls"},
-           "udp": {53: "dns"}}
+PORTMAP = {"tcp": {80: "http", 8080: "http", 443: "tls"}, "udp": {53: "dns"}}
 TCPFLAGS = ((0x01, "FIN"), (0x02, "SYN"), (0x04, "RST"),
             (0x08, "PSH"), (0x10, "ACK"), (0x20, "URG"))
 def parse(ts, data):
-    pkt = {"ts": ts, "layers": [], "error": None}
-    key = "eth"
+    pkt, key = {"ts": ts, "layers": [], "error": None}, "eth"
     try:
         while key in PARSERS:
             pkt["layers"].append(key)

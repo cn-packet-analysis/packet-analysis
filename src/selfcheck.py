@@ -39,14 +39,16 @@ def err(frame, layers):
     p = parse(0.0, frame)
     assert p["error"] and p["layers"] == layers and layers[-1] not in p, layers
     return p
+def _show(pkt, verbose=False):
+    out, err_buf = io.StringIO(), io.StringIO()
+    with redirect_stdout(out), redirect_stderr(err_buf):
+        output.show(pkt, verbose)
+    return out.getvalue(), err_buf.getvalue()
 def run():
     a = ok(ARP_REQ, ["eth", "arp"])["arp"]
     assert (a["opcode"], a["sha"], a["tha"], a["spa"], a["tpa"]) == (
         1, "aa:bb:cc:dd:ee:ff", "00:00:00:00:00:00", "192.168.0.5", "192.168.0.1")
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        output.show(parse(0.0, ARP_REQ))
-    line = buf.getvalue().rstrip("\n")
+    line = _show(parse(0.0, ARP_REQ))[0].rstrip("\n")
     assert "\n" not in line and len(MAC.findall(line)) == 2, line
     for bad in (arp(htype=6), arp(ptype=0x86DD), arp(cut=1)):
         err(bad, ["eth", "arp"])
@@ -118,20 +120,19 @@ def run():
     assert g[0] == "[IPv4]" and (g[1], g[3], g[4], g[5]) == ("192.168.0.5", "8.8.8.8", "64", "6") and "id=0x1c46" in d2[1]
     assert d2[2].split()[0:4:3] == ["[TCP]", "80"] and d2[2].split()[1] == "52134"
     for verbose in (False, True):
-        stdout, stderr = io.StringIO(), io.StringIO()
-        with redirect_stdout(stdout), redirect_stderr(stderr):
-            output.show(parse(0.0, TRUNCATED), verbose)
-        assert "truncated" not in stdout.getvalue() and stderr.getvalue() == "[ERROR] ipv4: truncated\n"
+        out, err_s = _show(parse(0.0, TRUNCATED), verbose)
+        assert "truncated" not in out and err_s == "[ERROR] ipv4: truncated\n"
     opts, frames, stats = types.SimpleNamespace(proto=None, host=None, port=None), [
         TCP_SYN, ICMP_ECHO, ARP_REQ, DNS_QUERY, TRUNCATED, ip4(6, tcp(sport=22))], output.Stats()
-    with redirect_stdout(io.StringIO()) as buf, redirect_stderr(io.StringIO()):
-        for f in frames:
-            p = parse(0.0, f)
-            if output.match(p, opts):
-                stats.add(p)
-                output.show(p)
-    assert stats.captured == 5 and (stats.n["tcp"], stats.n["icmp"], stats.n["arp"], stats.n["udp"], stats.n["other"]) == (1, 1, 1, 1, 1)
-    assert len(buf.getvalue().splitlines()) == 5
+    lines = []
+    for f in frames:
+        p = parse(0.0, f)
+        if output.match(p, opts):
+            stats.add(p)
+            lines.extend(_show(p)[0].splitlines())
+        _show(p, verbose=True)
+    assert stats.captured == 5 and len(lines) == 5
+    assert (stats.n["tcp"], stats.n["icmp"], stats.n["arp"], stats.n["udp"], stats.n["other"]) == (1, 1, 1, 1, 1)
     opts.proto = "tcp"
     assert output.match(parse(0.0, ip4(6, tcp(sport=1))), opts) and not output.match(parse(0.0, ICMP_ECHO), opts)
     opts.proto, opts.host = None, "192.168.0.1"
@@ -141,9 +142,6 @@ def run():
     assert output.match(q_pkt, opts) and not output.match(parse(0.0, ICMP_ECHO), opts)
     opts.host, opts.port = None, 80
     assert output.match(parse(0.0, TCP_SYN), opts) and not output.match(parse(0.0, ICMP_ECHO), opts)
-    for f in frames:
-        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
-            output.show(parse(0.0, f), verbose=True)
     print("selfcheck: all checks passed")
 if __name__ == "__main__":
     run()

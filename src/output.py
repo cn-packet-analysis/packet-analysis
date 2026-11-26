@@ -3,37 +3,32 @@ import sys, time
 from parse import esc
 LABEL = {"eth": "Ethernet", "ipv4": "IPv4", "arp": "ARP", "tcp": "TCP",
          "udp": "UDP", "icmp": "ICMP", "http": "HTTP", "dns": "DNS", "tls": "TLS"}
-PORT_PROTOCOLS = ("tcp", "udp")
-TRANSPORT = (*PORT_PROTOCOLS, "icmp")
+TRANSPORT = ("tcp", "udp", "icmp")
 COUNTERS = (*TRANSPORT, "arp", "other")
 APP = ("http", "dns", "tls")            # 페이로드를 대신 요약하는 계층
 def _icmp(d):
-    s = "type=%d  code=%d  csum=0x%04x" % (d["type"], d["code"], d["csum"])
-    return s + ("  id=0x%04x  seq=%d" % (d["id"], d["seq"]) if "id" in d else "")
+    s = f"type={d['type']}  code={d['code']}  csum=0x{d['csum']:04x}"
+    return s + (f"  id=0x{d['id']:04x}  seq={d['seq']}" if "id" in d else "")
 def _quoted(q):
-    s = "%s → %s   ttl=%d  proto=%d  id=0x%04x" % (q["src"], q["dst"], q["ttl"], q["proto"], q["id"])
-    return s + ("  %d → %d" % (q["sport"], q["dport"]) if "sport" in q else "")
+    s = f"{q['src']} → {q['dst']}   ttl={q['ttl']}  proto={q['proto']}  id=0x{q['id']:04x}"
+    return s + (f"  {q['sport']} → {q['dport']}" if "sport" in q else "")
 DETAIL = {
-    "eth": lambda d: "%s → %s   type=0x%04x" % (d["src"], d["dst"], d["type"]),
-    "ipv4": lambda d: "%s → %s   ttl=%d  proto=%d  len=%d  id=0x%04x" % (
-        d["src"], d["dst"], d["ttl"], d["proto"], d["len"], d["id"]),
-    "arp": lambda d: "%s → %s   opcode=%d  %s → %s" % (
-        d["sha"], d["tha"], d["opcode"], d["spa"], d["tpa"]),
-    "tcp": lambda d: "%d → %d   seq=%d  flags=%s  win=%d  ack=%d" % (
-        d["sport"], d["dport"], d["seq"], ",".join(d["flags"]) or "-", d["win"], d["ack"]),
-    "udp": lambda d: "%d → %d   len=%d" % (d["sport"], d["dport"], d["len"]),
+    "eth": lambda d: f"{d['src']} → {d['dst']}   type=0x{d['type']:04x}",
+    "ipv4": lambda d: f"{d['src']} → {d['dst']}   ttl={d['ttl']}  proto={d['proto']}  len={d['len']}  id=0x{d['id']:04x}",
+    "arp": lambda d: f"{d['sha']} → {d['tha']}   opcode={d['opcode']}  {d['spa']} → {d['tpa']}",
+    "tcp": lambda d: f"{d['sport']} → {d['dport']}   seq={d['seq']}  flags={','.join(d['flags']) or '-'}  win={d['win']}  ack={d['ack']}",
+    "udp": lambda d: f"{d['sport']} → {d['dport']}   len={d['len']}",
     "icmp": _icmp,
     "http": lambda d: d["line"],
-    "dns": lambda d: "id=0x%04x  flags=0x%04x  qd=%d  %s  qtype=%s  answers=%s" % (
-        d["id"], d["flags"], d["qdcount"], esc(d["qname"] or "."), d["qtype"], ",".join(d["answers"]) or "-"),
+    "dns": lambda d: f"id=0x{d['id']:04x}  flags=0x{d['flags']:04x}  qd={d['qdcount']}  {esc(d['qname'] or '.')}  qtype={d['qtype']}  answers={','.join(d['answers']) or '-'}",
     "tls": lambda d: d["note"],
 }
 def _ts(ts):
-    return time.strftime("%H:%M:%S", time.localtime(ts)) + ".%03d" % (ts % 1 * 1000)
+    return f"{time.strftime('%H:%M:%S', time.localtime(ts))}.{int(ts % 1 * 1000):03d}"
 def payload(pkt):
     for key in APP:
         if key in pkt:
-            return "%s %s" % (LABEL[key], DETAIL[key](pkt[key]))
+            return f"{LABEL[key]} {DETAIL[key](pkt[key])}"
     return "hex=" + pkt["payload"][:16].hex() if pkt["payload"] else ""
 def summary(pkt):
     """$1 ts, $2 L3 이름, $3/$5 주소, $4 화살표, $6~ 꼬리. $6에 TCP/UDP/ICMP는 L4 성공 시에만."""
@@ -51,40 +46,39 @@ def summary(pkt):
     elif l4:
         d = pkt[l4]
         if l4 != "icmp":
-            src, dst = "%s:%d" % (src, d["sport"]), "%s:%d" % (dst, d["dport"])
+            src, dst = f"{src}:{d['sport']}", f"{dst}:{d['dport']}"
         tail = [LABEL[l4]]
         if l4 == "tcp":
-            tail.append("[%s]" % ",".join(d["flags"]))
+            tail.append(f"[{','.join(d['flags'])}]")
         elif l4 == "icmp":
-            tail.append("type=%d" % d["type"])
+            tail.append(f"type={d['type']}")
             if "id" in d:
-                tail.append("id=0x%04x seq=%d" % (d["id"], d["seq"]))
+                tail.append(f"id=0x{d['id']:04x} seq={d['seq']}")
             elif "quoted" in d:
                 q = d["quoted"]
-                tail.append("orig=%s→%s%s" % (q["src"], q["dst"], ":%d" % q["dport"] if "dport" in q else ""))
-        tail.append("len=%d" % n)
+                tail.append(f"orig={q['src']}→{q['dst']}" + (f":{q['dport']}" if "dport" in q else ""))
+        tail.append(f"len={n}")
     elif arp:
         tail = ["request" if arp["opcode"] == 1 else "reply", "who-has", arp["tpa"]]
     elif ip:
         frag = ip["frag_off"] or ip["flags"] & 1
-        tail = ["frag" if frag else "proto=%d" % ip["proto"], "len=%d" % n]
+        tail = ["frag" if frag else f"proto={ip['proto']}", f"len={n}"]
     else:
-        tail = ["type=0x%04x" % eth.get("type", 0), "len=%d" % n]
+        tail = [f"type=0x{eth.get('type', 0):04x}", f"len={n}"]
     if not pkt["error"] and (text := payload(pkt)):
         tail.append(text)
-    return "%s  %-5s %s → %s   %s" % (_ts(pkt["ts"]), name, src, dst, "  ".join(tail))
+    return f"{_ts(pkt['ts'])}  {name:<5} {src} → {dst}   {'  '.join(tail)}"
 def detail(pkt):
     out = []
     for i, key in enumerate(pkt["layers"]):
         d = pkt.get(key)
-        text = "[%s]  %s" % (LABEL[key], DETAIL[key](d)) if d else "[Malformed]  " + key
-        out.append("  " * i + text)
+        out.append("  " * i + (f"[{LABEL[key]}]  {DETAIL[key](d)}" if d else f"[Malformed]  {key}"))
         if key == "dns" and d:
-            out.append("  " * (i + 1) + "[Wire]  hex=" + d["wire"])
+            out.append("  " * (i + 1) + f"[Wire]  hex={d['wire']}")
         elif key == "icmp" and d and "quoted" in d:
-            out.append("  " * (i + 1) + "[Quoted]  " + _quoted(d["quoted"]))
+            out.append("  " * (i + 1) + f"[Quoted]  {_quoted(d['quoted'])}")
     if not pkt["error"] and pkt["payload"] and not any(k in pkt for k in APP):
-        out.append("%s[Payload]  %s" % ("  " * len(pkt["layers"]), payload(pkt)))
+        out.append("  " * len(pkt["layers"]) + f"[Payload]  {payload(pkt)}")
     return "\n".join(out)
 def show(pkt, verbose=False):
     print(detail(pkt) if verbose else summary(pkt))
@@ -92,14 +86,12 @@ def show(pkt, verbose=False):
         print("[ERROR] " + esc(pkt["error"]), file=sys.stderr)
 class Stats:
     def __init__(self):
-        self.captured = 0
-        self.n = dict.fromkeys(COUNTERS, 0)
+        self.captured, self.n = 0, dict.fromkeys(COUNTERS, 0)
     def add(self, pkt):
         self.captured += 1
         self.n[next((k for k in COUNTERS if k in pkt), "other")] += 1
     def line(self):
-        return "captured %d  |  %s" % (
-            self.captured, "  ".join("%s %d" % (LABEL.get(k, k), self.n[k]) for k in COUNTERS))
+        return f"captured {self.captured}  |  {'  '.join(f'{LABEL.get(k, k)} {self.n[k]}' for k in COUNTERS)}"
 def match(pkt, opts):
     if opts.proto and opts.proto not in pkt:
         return False
@@ -108,6 +100,5 @@ def match(pkt, opts):
         ip, arp = pkt.get("ipv4", {}), pkt.get("arp", {})
         if opts.host not in (ip.get("src"), ip.get("dst"), arp.get("spa"), arp.get("tpa"), q.get("src"), q.get("dst")):
             return False
-    ports = [pkt[k][f] for k in PORT_PROTOCOLS if k in pkt for f in ("sport", "dport")]
-    ports += [q[f] for f in ("sport", "dport") if f in q]
+    ports = [d[f] for d in (pkt.get("tcp"), pkt.get("udp"), q) if d for f in ("sport", "dport") if f in d]
     return 22 not in ports if opts.port is None else opts.port in ports
